@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Classroom Projector Bingo Caller</title>
+<title>Bingo Caller</title>
 <style>
   :root {
     --bg-dark: #090d16;
@@ -403,7 +403,7 @@
   <!-- Top Row: Branding and Quick Controls -->
   <div class="header-top">
     <div class="brand">
-      <span>🎯</span> ARCADE CALLER
+      <span>🎯</span> BINGO CALLER
     </div>
     <div class="icon-group">
       <button class="btn-icon" title="Toggle Sound (M)" id="btnSound" onclick="toggleAudio()">🔊</button>
@@ -413,10 +413,10 @@
     </div>
   </div>
   
-  <!-- Bottom Row: Game Settings and Print -->
-  <div class="header-bottom">
+  <div class="nav-controls">
     <select id="modeSelect" onchange="initSelectedMode()">
       <option value="custom">✏️ Vocabulary / Custom Text</option>
+      <option value="images">🖼️ Custom Images (Upload)</option>
       <option value="numbers">🔢 Classic B-I-N-G-O (1–75)</option>
       <option value="letters">🔤 Alphabet Letters (A–Z)</option>
       <option value="clock">🕒 Analog Clocks (Time-Telling)</option>
@@ -434,6 +434,8 @@
     </select>
 
     <button id="btnEditWords" onclick="openWordModal()">📝 Edit Words</button>
+    <button id="btnUploadImages" onclick="document.getElementById('imageUploader').click()" style="display: none; background: #ff2a6d; color: white;">🖼️ Upload Images</button>
+    <input type="file" id="imageUploader" multiple accept="image/*" style="display: none;" onchange="handleImageUpload(event)">
     <button class="btn-text-icon" onclick="openPrintModal()">🖨️ Print Cards</button>
   </div>
 </header>
@@ -480,13 +482,21 @@
 
 <!-- Print Generator Modal -->
 <div class="modal-overlay" id="printModal">
-  <div class="modal" style="width: 400px;">
+  <div class="modal" style="width: 450px;">
     <h2>🖨️ Print Bingo Cards</h2>
     <p style="font-size: 14px; color: var(--text-main); margin-bottom: 15px;">
       Generate custom Bingo cards based on the currently selected game mode. Cards will be formatted 2-per-page for A4 printing.
     </p>
+    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+      <label style="font-weight: bold; width: 140px;">Grid Size:</label>
+      <select id="gridSize" style="width: 140px; padding: 8px; border-radius: 6px;">
+        <option value="3">3x3 (9 spaces)</option>
+        <option value="4">4x4 (16 spaces)</option>
+        <option value="5" selected>5x5 (25 spaces)</option>
+      </select>
+    </div>
     <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-      <label style="font-weight: bold;">Number of Cards:</label>
+      <label style="font-weight: bold; width: 140px;">Number of Cards:</label>
       <input type="number" id="printCount" value="30" min="1" max="100" style="width: 80px;">
     </div>
     <div class="modal-actions">
@@ -497,10 +507,17 @@
 </div>
 
 <script>
-/* ================= AUDIO SYNTHESIZER ================= */
+/* ================= AUDIO SYNTHESIZER (Web Audio API) ================= */
 class SoundEngine {
-  constructor() { this.ctx = null; this.enabled = true; }
-  init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+  constructor() {
+    this.ctx = null;
+    this.enabled = true;
+  }
+  init() {
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  }
   tick() {
     if (!this.enabled) return;
     this.init();
@@ -594,8 +611,15 @@ let isRolling = false;
 let autoTimer = null;
 let autoSeconds = 8;
 let speechEnabled = true;
+let uploadedImagesPool = [];
 
 const MODES = {
+  images: () => {
+    if (uploadedImagesPool.length === 0) {
+      return [{ category: 'IMAGES', display: 'NO IMAGES YET', sub: 'Click Upload Images above!', speak: 'Please upload images', pill: 'Empty' }];
+    }
+    return [...uploadedImagesPool];
+  },
   custom: () => {
     const raw = document.getElementById('wordTextarea').value;
     return raw.split(/[\n,]+/).map(w => w.trim()).filter(w => w !== '').map(w => ({
@@ -709,16 +733,21 @@ const MODES = {
     return combs;
   },
   fraction: () => {
-    const list = [];
-    for (let ans = 2; ans <= 9; ans++) {
-      for (let divisor = 2; divisor <= 9; divisor++) {
-        const dividend = ans * divisor;
-        list.push({
-          category: 'DIVISION', display: `${dividend} ÷ ${divisor}`, speak: `${dividend} divided by ${divisor}`, pill: `${dividend} ÷ ${divisor} = ${ans}`, print: `${dividend} ÷ ${divisor}`
-        });
-      }
-    }
-    return list;
+    const fractions = [
+      [1, 2], [1, 3], [2, 3], [1, 4], [3, 4],
+      [1, 5], [2, 5], [3, 5], [4, 5],
+      [1, 6], [5, 6], [3, 8], [5, 8], [7, 8]
+    ];
+    return fractions.map(([num, den]) => ({
+      category: 'FRACTIONS',
+      customRender: `
+        <div class="fraction-view">
+          <div class="numerator">${num}</div>
+          <div class="denominator">${den}</div>
+        </div>`,
+      speak: `${num} over ${den}`,
+      pill: `${num}/${den}`
+    }));
   },
   emoji: () => {
     const list = [
@@ -730,10 +759,84 @@ const MODES = {
       ['🍔', 'Burger'], ['🍟', 'Fries'], ['🚗', 'Car'], ['✈️', 'Airplane'], ['☀️', 'Sun']
     ];
     return list.map(([emo, name]) => ({
-      category: 'EMOJI', display: emo, speak: name, pill: `${emo} ${name}`, print: emo
+      category: 'EMOJI',
+      display: emo,
+      sub: name,
+      speak: name,
+      pill: `${emo} ${name}`
     }));
   }
 };
+
+function handleImageUpload(event) {
+  const files = event.target.files;
+  if (files.length === 0) return;
+  
+  uploadedImagesPool = [];
+  let processedCount = 0;
+
+  // Show a loading message on the main screen
+  document.getElementById('mainDisplay').innerHTML = `<span style="color: var(--accent-gold)">Processing Images...</span>`;
+  document.getElementById('subDisplay').innerText = "Please wait a moment";
+
+  Array.from(files).forEach((file, index) => {
+    // Grab the file name (without extension) for the robot to read out loud
+    const fileName = file.name.split('.').slice(0, -1).join(' ').replace(/[-_]/g, ' '); 
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        // Shrink the image down so it doesn't crash the browser when printing
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH_HEIGHT = 400; // Perfect resolution for Bingo cards
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH_HEIGHT) {
+            height = Math.round(height * (MAX_WIDTH_HEIGHT / width));
+            width = MAX_WIDTH_HEIGHT;
+          }
+        } else {
+          if (height > MAX_WIDTH_HEIGHT) {
+            width = Math.round(width * (MAX_WIDTH_HEIGHT / height));
+            height = MAX_WIDTH_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert the shrunken image into web-safe code (Base64 Data URL)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        const imgTag = `<img src="${dataUrl}" style="max-width:100%; max-height:100%; object-fit:contain; border-radius: 8px;">`;
+        
+        uploadedImagesPool.push({
+          category: 'CUSTOM IMAGES',
+          customRender: imgTag,
+          print: imgTag,
+          sub: fileName,
+          speak: fileName,
+          pill: `🖼️ ${fileName || 'Img ' + (index+1)}`
+        });
+
+        processedCount++;
+        if (processedCount === files.length) {
+          // All images are processed and ready!
+          document.getElementById('modeSelect').value = 'images';
+          initSelectedMode();
+          document.getElementById('mainDisplay').innerHTML = `<span style="color: var(--accent-green)">${files.length} Images Ready!</span>`;
+          document.getElementById('subDisplay').innerText = "Press Draw Next";
+        }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -747,6 +850,7 @@ function initSelectedMode() {
   stopAutoDraw();
   const mode = document.getElementById('modeSelect').value;
   document.getElementById('btnEditWords').style.display = (mode === 'custom') ? 'inline-block' : 'none';
+  document.getElementById('btnUploadImages').style.display = (mode === 'images') ? 'inline-block' : 'none';
   pool = shuffle(MODES[mode]());
   called = [];
   updateStats();
@@ -871,10 +975,13 @@ function closePrintModal() { document.getElementById('printModal').style.display
 
 function generateAndPrintCards() {
   const count = parseInt(document.getElementById('printCount').value) || 30;
+  const gridSize = parseInt(document.getElementById('gridSize').value) || 5;
+  const totalCells = gridSize * gridSize;
+  
   const allItems = [...pool, ...called]; 
   
-  if (allItems.length < 24) {
-    alert("Notice: You have fewer than 24 unique items in this mode. Some items will repeat on the Bingo cards to fill the 5x5 grid.");
+  if (allItems.length < totalCells - 1) {
+    alert(`Notice: You have fewer unique items than the grid requires. Some items will repeat to fill the ${gridSize}x${gridSize} grid.`);
   }
 
   const modeName = document.getElementById('categoryBadge').innerText;
@@ -887,13 +994,16 @@ function generateAndPrintCards() {
     let gridHtml = '';
     let itemIndex = 0;
     
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 5; c++) {
-        if (r === 2 && c === 2) {
+    const hasCenter = gridSize % 2 !== 0; // True for 3x3 and 5x5
+    const centerIndex = Math.floor(gridSize / 2); // 1 for 3x3, 2 for 5x5
+    
+    for (let r = 0; r < gridSize; r++) {
+      for (let c = 0; c < gridSize; c++) {
+        if (hasCenter && r === centerIndex && c === centerIndex) {
           gridHtml += `<div class="bingo-cell free-space">★<br>FREE</div>`;
         } else {
           let item = shuffled[itemIndex % shuffled.length];
-          let content = item.print || item.display || '?';
+          let content = item ? (item.print || item.display || '?') : '?';
           gridHtml += `<div class="bingo-cell">${content}</div>`;
           itemIndex++;
         }
@@ -906,7 +1016,7 @@ function generateAndPrintCards() {
           <h2>${modeName}</h2>
           <span>Name: ________________________</span>
         </div>
-        <div class="bingo-grid">${gridHtml}</div>
+        <div class="bingo-grid grid-${gridSize}">${gridHtml}</div>
       </div>
     `;
     
@@ -915,7 +1025,6 @@ function generateAndPrintCards() {
   
   closePrintModal();
   
-  // OPEN A NEW TAB FOR PRINTING
   const printWindow = window.open('', '_blank');
   printWindow.document.write(`
     <!DOCTYPE html>
@@ -926,7 +1035,7 @@ function generateAndPrintCards() {
         body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #fff; color: #000; }
         .print-page { 
           page-break-after: always; 
-          display: block; /* Changed from flex to block to fix overlapping */
+          display: block; 
           padding: 10mm;
           box-sizing: border-box;
         }
@@ -937,7 +1046,7 @@ function generateAndPrintCards() {
           padding: 15px;
           box-sizing: border-box; 
           page-break-inside: avoid;
-          margin-bottom: 20mm; /* Forces safe spacing between the two cards */
+          margin-bottom: 20mm; 
         }
         .bingo-card:last-child {
           margin-bottom: 0;
@@ -954,14 +1063,16 @@ function generateAndPrintCards() {
         .bingo-header span { font-size: 16px; font-weight: bold;}
         
         .bingo-grid { 
-          display: grid; /* Replaced flexbox with strict grid to guarantee perfect squares */
-          grid-template-columns: repeat(5, 1fr);
+          display: grid; 
           gap: 4px;
           width: 100%;
         }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-4 { grid-template-columns: repeat(4, 1fr); }
+        .grid-5 { grid-template-columns: repeat(5, 1fr); }
         
         .bingo-cell { 
-          aspect-ratio: 1 / 1; /* Forces the box to be a perfect square */
+          aspect-ratio: 1 / 1; 
           border: 2px solid #333; 
           border-radius: 5px;
           display: flex !important; 
@@ -973,6 +1084,12 @@ function generateAndPrintCards() {
           word-break: break-word; 
           padding: 5px; 
           box-sizing: border-box;
+          overflow: hidden;
+        }
+        .bingo-cell img {
+          max-width: 100%;
+          max-height: 100%;
+          object-fit: contain;
         }
         .free-space { background: #e0e0e0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         
@@ -984,7 +1101,6 @@ function generateAndPrintCards() {
     <body>
       ${html}
       <script>
-        // Give the new window a half-second to load, then trigger the PDF dialog
         setTimeout(() => { window.print(); }, 500);
       <\/script>
     </body>
