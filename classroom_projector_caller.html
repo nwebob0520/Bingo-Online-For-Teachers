@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classroom Projector Arcade Caller</title>
+<style>
+  :root {
+    --bg-dark: #090d16;
+    --card-bg: rgba(22, 30, 49, 0.85);
+    --accent-cyan: #00f2fe;
+    --accent-gold: #ffc837;
+    --accent-pink: #ff2a6d;
+    --accent-green: #05ffa1;
+    --text-main: #f0f4f8;
+    --text-muted: #8c9ba8;
+    --border-glow: rgba(0, 242, 254, 0.25);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: radial-gradient(circle at top center, #172136 0%, var(--bg-dark) 100%);
+    color: var(--text-main);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Top Navigation Bar */
+  header {
+    height: 64px;
+    background: rgba(13, 19, 33, 0.8);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 10;
+  }
+
+  .brand {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    background: linear-gradient(45deg, var(--accent-cyan), var(--accent-green));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  select, button, input[type="number"] {
+    background: #1c273e;
+    color: var(--text-main);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 15px;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  select:hover, button:hover {
+    border-color: var(--accent-cyan);
+    background: #253352;
+  }
+
+  .btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  /* Main Stage */
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 20px;
+  }
+
+  /* Central Card Display */
+  .display-stage {
+    position: relative;
+    width: min(88vw, 760px);
+    height: min(46vh, 400px);
+    background: var(--card-bg);
+    border: 2px solid var(--border-glow);
+    border-radius: 28px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 242, 254, 0.15);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(16px);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  .display-stage.shuffle {
+    animation: rumble 0.08s infinite linear;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 50px rgba(255, 200, 55, 0.35);
+  }
+
+  @keyframes rumble {
+    0% { transform: translate(0, 0) scale(0.99); }
+    50% { transform: translate(-2px, 3px) scale(1.01); }
+    100% { transform: translate(2px, -2px) scale(1); }
+  }
+
+  .badge-category {
+    position: absolute;
+    top: 18px;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent-cyan);
+    background: rgba(0, 242, 254, 0.1);
+    padding: 4px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(0, 242, 254, 0.2);
+  }
+
+  .main-text {
+    font-size: clamp(48px, 9vw, 110px);
+    font-weight: 900;
+    text-align: center;
+    color: #ffffff;
+    text-shadow: 0 8px 30px rgba(0,0,0,0.8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.1;
+    max-width: 90%;
+    word-break: break-word;
+  }
+
+  .sub-text {
+    font-size: clamp(18px, 2.5vw, 26px);
+    color: var(--accent-gold);
+    margin-top: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  /* Specific Mode Render Styles */
+  .playing-card {
+    background: #ffffff;
+    color: #111;
+    width: 140px;
+    height: 200px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 12px;
+    font-weight: 900;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  }
+  .playing-card.red { color: #e6194b; }
+  .playing-card .card-center { font-size: 50px; text-align: center; }
+
+  .dice-face {
+    width: 130px;
+    height: 130px;
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    padding: 16px;
+  }
+  .dot { background: #1a1a1a; border-radius: 50%; width: 22px; height: 22px; place-self: center; }
+
+  .fraction-view {
+    display: inline-flex;
+    flex-direction: column;
+    vertical-align: middle;
+    align-items: center;
+    line-height: 1;
+    font-size: clamp(60px, 10vw, 120px);
+  }
+  .fraction-view .numerator { border-bottom: 5px solid white; width: 100%; text-align: center; padding-bottom: 4px; }
+  .fraction-view .denominator { text-align: center; padding-top: 4px; }
+
+  /* Big Action Button Bar */
+  .action-bar {
+    margin-top: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .btn-draw-main {
+    background: linear-gradient(135deg, var(--accent-cyan), #0072ff);
+    color: #ffffff;
+    border: none;
+    padding: 16px 56px;
+    font-size: 26px;
+    font-weight: 800;
+    border-radius: 40px;
+    box-shadow: 0 10px 30px rgba(0, 114, 255, 0.4);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    letter-spacing: 1px;
+  }
+
+  .btn-draw-main:hover {
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 15px 40px rgba(0, 114, 255, 0.6);
+  }
+  .btn-draw-main:active { transform: translateY(1px) scale(0.98); }
+
+  .btn-auto {
+    background: #1e293b;
+    border: 1px solid var(--accent-gold);
+    color: var(--accent-gold);
+    padding: 16px 28px;
+    font-size: 18px;
+    font-weight: 700;
+    border-radius: 40px;
+  }
+  .btn-auto.active {
+    background: var(--accent-gold);
+    color: #111;
+    box-shadow: 0 0 25px rgba(255, 200, 55, 0.5);
+  }
+
+  /* Bottom Drawer: Call History & Validation */
+  footer {
+    height: 135px;
+    background: rgba(10, 15, 26, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    padding: 10px 24px;
+    z-index: 10;
+  }
+
+  .history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .history-stream {
+    flex: 1;
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    align-items: center;
+    padding-bottom: 6px;
+  }
+
+  .history-stream::-webkit-scrollbar { height: 6px; }
+  .history-stream::-webkit-scrollbar-thumb { background: #253352; border-radius: 10px; }
+
+  .history-pill {
+    flex-shrink: 0;
+    background: #172136;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+    padding: 8px 16px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    animation: pillSlide 0.3s ease-out;
+  }
+
+  .history-pill.latest {
+    background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(5, 255, 161, 0.2));
+    border-color: var(--accent-cyan);
+    color: #ffffff;
+    box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
+  }
+
+  @keyframes pillSlide {
+    from { opacity: 0; transform: translateY(10px) scale(0.9); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* Custom Words Dialog Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal {
+    background: #141c2e;
+    border: 1px solid var(--accent-cyan);
+    width: min(90vw, 550px);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+  }
+  .modal h2 { margin-bottom: 12px; color: var(--accent-cyan); }
+  .modal textarea {
+    width: 100%;
+    height: 180px;
+    background: #090d16;
+    border: 1px solid #253352;
+    color: #fff;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 15px;
+    resize: vertical;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  /* Canvas Confetti */
+  #confettiCanvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 999;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="confettiCanvas"></canvas>
+
+<header>
+  <div class="brand">
+    <span>🎯</span> ARCADE PROJECTOR CALLER
+  </div>
+
+  <div class="nav-controls">
+    <select id="modeSelect" onchange="initSelectedMode()">
+      <option value="custom">✏️ Vocabulary / Custom Text</option>
+      <option value="numbers">🔢 Classic B-I-N-G-O (1–75)</option>
+      <option value="letters">🔤 Alphabet Letters (A–Z)</option>
+      <option value="clock">🕒 Analog Clocks (Time-Telling)</option>
+      <option value="mult">✖️ Multiplication (2×2 to 9×9)</option>
+      <option value="math">➕ Mental Math (+ and -)</option>
+      <option value="stroop">🧠 Stroop Test (Ink vs Color)</option>
+      <option value="cards">🃏 Deck of Cards (52)</option>
+      <option value="dice">🎲 Roll Two Dice (Combinations)</option>
+      <option value="fraction">➗ Fractions</option>
+      <option value="emoji">😀 Emoji Quest</option>
+    </select>
+
+    <button id="btnEditWords" onclick="openWordModal()">📝 Edit Words</button>
+    <button class="btn-icon" title="Toggle Sound (M)" id="btnSound" onclick="toggleAudio()">🔊</button>
+    <button class="btn-icon" title="Toggle Speech Readout" id="btnSpeech" onclick="toggleSpeech()">🗣️</button>
+    <button class="btn-icon" title="Fullscreen (F)" onclick="toggleFullscreen()">⛶</button>
+    <button onclick="resetPool()" title="Reshuffle & Restart">🔄 Reset</button>
+  </div>
+</header>
+
+<main>
+  <div class="display-stage" id="stage">
+    <div class="badge-category" id="categoryBadge">READY</div>
+    <div class="main-text" id="mainDisplay">PRESS DRAW</div>
+    <div class="sub-text" id="subDisplay">Spacebar or click below</div>
+  </div>
+
+  <div class="action-bar">
+    <button class="btn-draw-main" id="btnDraw" onclick="triggerDraw()">🎲 DRAW NEXT</button>
+    <button class="btn-auto" id="btnAuto" onclick="toggleAutoDraw()">⏱️ AUTO: OFF</button>
+  </div>
+</main>
+
+<footer>
+  <div class="history-header">
+    <span id="poolStats">Drawn: 0 | Remaining: 0</span>
+    <span>Verification Board (Latest First)</span>
+  </div>
+  <div class="history-stream" id="historyStream"></div>
+</footer>
+
+<!-- Custom Words Modal -->
+<div class="modal-overlay" id="wordModal">
+  <div class="modal">
+    <h2>Edit Custom Words / Vocabulary</h2>
+    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">
+      Separate words with commas, tabs, or new lines.
+    </p>
+    <textarea id="wordTextarea">Elephant, Giraffe, Astronaut, Dinosaur, Helicopter, Telescope, Volcano, Kangaroo, Submarine, Lightning, Mountain, Octopus, Castle, Compass, Butterfly, Diamond, Fireworks, Pyramid, Galaxy, Treasure</textarea>
+    <div class="modal-actions">
+      <button onclick="closeWordModal(false)">Cancel</button>
+      <button style="background: var(--accent-cyan); color: #000;" onclick="closeWordModal(true)">Save & Load</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= AUDIO SYNTHESIZER (Web Audio API) ================= */
+class SoundEngine {
+  constructor() {
+    this.ctx = null;
+    this.enabled = true;
+  }
+  init() {
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  }
+  tick() {
+    if (!this.enabled) return;
+    this.init();
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(450, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(120, this.ctx.currentTime + 0.04);
+    gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.04);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.04);
+  }
+  reveal() {
+    if (!this.enabled) return;
+    this.init();
+    const chords = [523.25, 659.25, 783.99, 1046.50]; // C Major Fanfare
+    chords.forEach((freq, idx) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.15, this.ctx.currentTime + (idx * 0.04) + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.6 + (idx * 0.05));
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(this.ctx.currentTime + (idx * 0.04));
+      osc.stop(this.ctx.currentTime + 0.8);
+    });
+  }
+}
+const sound = new SoundEngine();
+
+/* ================= CONFETTI SYSTEM ================= */
+const canvas = document.getElementById('confettiCanvas');
+const ctx = canvas.getContext('2d');
+let confetti = [];
+function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function shootConfetti() {
+  for (let i = 0; i < 70; i++) {
+    confetti.push({
+      x: canvas.width / 2,
+      y: canvas.height * 0.6,
+      vx: (Math.random() - 0.5) * 18,
+      vy: (Math.random() - 0.9) * 16,
+      size: Math.random() * 8 + 4,
+      color: ['#00f2fe', '#ffc837', '#ff2a6d', '#05ffa1', '#ffffff'][Math.floor(Math.random() * 5)],
+      life: 100
+    });
+  }
+}
+function updateConfetti() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const p = confetti[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.35; // Gravity
+    p.life--;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    if (p.life <= 0) confetti.splice(i, 1);
+  }
+  requestAnimationFrame(updateConfetti);
+}
+updateConfetti();
+
+/* ================= GAME LOGIC & MODES ================= */
+let pool = [];
+let called = [];
+let isRolling = false;
+let autoTimer = null;
+let autoSeconds = 8;
+let speechEnabled = true;
+
+const MODES = {
+  custom: () => {
+    const raw = document.getElementById('wordTextarea').value;
+    return raw.split(/[\n,]+/).map(w => w.trim()).filter(w => w !== '').map(w => ({
+      category: 'VOCABULARY',
+      display: w,
+      speak: w,
+      pill: w
+    }));
+  },
+  numbers: () => {
+    const items = [];
+    for (let i = 1; i <= 75; i++) {
+      let letter = 'B';
+      if (i > 15) letter = 'I';
+      if (i > 30) letter = 'N';
+      if (i > 45) letter = 'G';
+      if (i > 60) letter = 'O';
+      items.push({
+        category: `BINGO - ${letter}`,
+        display: `${letter}-${i}`,
+        speak: `${letter}, ${i}`,
+        pill: `${letter}-${i}`
+      });
+    }
+    return items;
+  },
+  letters: () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    return chars.map(c => ({
+      category: 'ALPHABET',
+      display: `${c} ${c.toLowerCase()}`,
+      speak: `Letter ${c}`,
+      pill: `${c} ${c.toLowerCase()}`
+    }));
+  },
+  clock: () => {
+    const times = [];
+    for (let h = 1; h <= 12; h++) {
+      [0, 15, 30, 45].forEach(m => {
+        const timeStr = `${h}:${m === 0 ? '00' : m}`;
+        const hDeg = (h % 12) * 30 + m * 0.5;
+        const mDeg = m * 6;
+        const clockSvg = `
+          <svg width="180" height="180" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="46" stroke="#00f2fe" stroke-width="4" fill="#090d16" />
+            <circle cx="50" cy="50" r="3" fill="#fff" />
+            <!-- Hour Hand -->
+            <line x1="50" y1="50" x2="50" y2="28" stroke="#ffc837" stroke-width="5" stroke-linecap="round" transform="rotate(${hDeg} 50 50)" />
+            <!-- Minute Hand -->
+            <line x1="50" y1="50" x2="50" y2="16" stroke="#05ffa1" stroke-width="3" stroke-linecap="round" transform="rotate(${mDeg} 50 50)" />
+          </svg>`;
+        times.push({
+          category: 'TIME TELLING',
+          html: clockSvg,
+          sub: timeStr,
+          speak: `${h} ${m === 0 ? "o'clock" : (m === 15 ? "fifteen" : (m === 30 ? "thirty" : "forty-five"))}`,
+          pill: timeStr
+        });
+      });
+    }
+    return times;
+  },
+  mult: () => {
+    const facts = [];
+    for (let i = 2; i <= 9; i++) {
+      for (let j = 2; j <= 9; j++) {
+        facts.push({
+          category: 'MULTIPLICATION',
+          display: `${i} × ${j}`,
+          sub: `= ${i * j}`,
+          speak: `${i} times ${j} is ${i * j}`,
+          pill: `${i}×${j}=${i * j}`
+        });
+      }
+    }
+    return facts;
+  },
+  math: () => {
+    const list = [];
+    for (let i = 1; i <= 30; i++) {
+      const a = Math.floor(Math.random() * 20) + 1;
+      const b = Math.floor(Math.random() * 20) + 1;
+      const isAdd = Math.random() > 0.4;
+      const question = isAdd ? `${a} + ${b}` : `${Math.max(a, b)} - ${Math.min(a, b)}`;
+      const ans = isAdd ? a + b : Math.max(a, b) - Math.min(a, b);
+      list.push({
+        category: 'MENTAL MATH',
+        display: question,
+        sub: `= ${ans}`,
+        speak: `${question}`,
+        pill: `${question} = ${ans}`
+      });
+    }
+    return list;
+  },
+  stroop: () => {
+    const colorNames = ['RED', 'BLUE', 'GREEN', 'YELLOW', 'PURPLE', 'ORANGE'];
+    const colorHexes = {
+      'RED': '#ff2a6d',
+      'BLUE': '#00f2fe',
+      'GREEN': '#05ffa1',
+      'YELLOW': '#ffc837',
+      'PURPLE': '#d500f9',
+      'ORANGE': '#ff9100'
+    };
+    const items = [];
+    colorNames.forEach(word => {
+      colorNames.filter(c => c !== word).forEach(ink => {
+        items.push({
+          category: 'STROOP TEST (READ INK COLOR!)',
+          customRender: `<span style="color:${colorHexes[ink]}; font-size:120px; font-weight:900;">${word}</span>`,
+          sub: `Ink: ${ink}`,
+          speak: `Word is ${word}, ink is ${ink}`,
+          pill: `${word} in ${ink}`
+        });
+      });
+    });
+    return items;
+  },
+  cards: () => {
+    const suits = [
+      { s: '♠', name: 'Spades', red: false },
+      { s: '♥', name: 'Hearts', red: true },
+      { s: '♦', name: 'Diamonds', red: true },
+      { s: '♣', name: 'Clubs', red: false }
+    ];
+    const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+    const deck = [];
+    suits.forEach(st => {
+      ranks.forEach(rk => {
+        deck.push({
+          category: 'PLAYING CARD',
+          customRender: `
+            <div class="playing-card ${st.red ? 'red' : ''}">
+              <div>${rk} ${st.s}</div>
+              <div class="card-center">${st.s}</div>
+              <div style="transform: rotate(180deg);">${rk} ${st.s}</div>
+            </div>`,
+          speak: `${rk} of ${st.name}`,
+          pill: `${rk}${st.s}`
+        });
+      });
+    });
+    return deck;
+  },
+  dice: () => {
+    const dotMap = {
+      1: [4],
+      2: [0, 8],
+      3: [0, 4, 8],
+      4: [0, 2, 6, 8],
+      5: [0, 2, 4, 6, 8],
+      6: [0, 2, 3, 5, 6, 8]
+    };
+    function renderDie(num) {
+      let dots = '';
+      for (let i = 0; i < 9; i++) {
+        dots += dotMap[num].includes(i) ? `<div class="dot"></div>` : `<div></div>`;
+      }
+      return `<div class="dice-face">${dots}</div>`;
+    }
+    const combs = [];
+    for (let d1 = 1; d1 <= 6; d1++) {
+      for (let d2 = d1; d2 <= 6; d2++) {
+        combs.push({
+          category: 'DICE ROLL',
+          customRender: `<div style="display:flex; gap:20px;">${renderDie(d1)}${renderDie(d2)}</div>`,
+          sub: `Sum: ${d1 + d2}`,
+          speak: `${d1} and ${d2}, total ${d1 + d2}`,
+          pill: `🎲 ${d1} + ${d2} (${d1+d2})`
+        });
+      }
+    }
+    return combs;
+  },
+  fraction: () => {
+    const fractions = [
+      [1, 2], [1, 3], [2, 3], [1, 4], [3, 4],
+      [1, 5], [2, 5], [3, 5], [4, 5],
+      [1, 6], [5, 6], [3, 8], [5, 8], [7, 8]
+    ];
+    return fractions.map(([num, den]) => ({
+      category: 'FRACTIONS',
+      customRender: `
+        <div class="fraction-view">
+          <div class="numerator">${num}</div>
+          <div class="denominator">${den}</div>
+        </div>`,
+      speak: `${num} over ${den}`,
+      pill: `${num}/${den}`
+    }));
+  },
+  emoji: () => {
+    const list = [
+      ['🦁', 'Lion'], ['🐘', 'Elephant'], ['🐼', 'Panda'], ['🚀', 'Rocket'],
+      ['🍕', 'Pizza'], ['🍦', 'Ice Cream'], ['⚽', 'Soccer'], ['🎸', 'Guitar'],
+      ['👑', 'Crown'], ['💎', 'Diamond'], ['🔥', 'Fire'], ['🌈', 'Rainbow'],
+      ['🍩', 'Donut'], ['🥑', 'Avocado'], ['🛸', 'UFO'], ['🦖', 'T-Rex']
+    ];
+    return list.map(([emo, name]) => ({
+      category: 'EMOJI',
+      display: emo,
+      sub: name,
+      speak: name,
+      pill: `${emo} ${name}`
+    }));
+  }
+};
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function initSelectedMode() {
+  stopAutoDraw();
+  const mode = document.getElementById('modeSelect').value;
+  document.getElementById('btnEditWords').style.display = (mode === 'custom') ? 'inline-block' : 'none';
+  pool = shuffle(MODES[mode]());
+  called = [];
+  updateStats();
+  document.getElementById('historyStream').innerHTML = '';
+  document.getElementById('categoryBadge').innerText = mode.toUpperCase();
+  document.getElementById('mainDisplay').innerHTML = 'READY';
+  document.getElementById('subDisplay').innerText = 'Press Draw Next';
+}
+
+function triggerDraw() {
+  if (isRolling) return;
+  if (pool.length === 0) {
+    document.getElementById('mainDisplay').innerHTML = '🏆 ALL DRAWN!';
+    document.getElementById('subDisplay').innerText = 'Click Reset to reshuffle';
+    shootConfetti();
+    return;
+  }
+
+  isRolling = true;
+  const stage = document.getElementById('stage');
+  stage.classList.add('shuffle');
+
+  let rollCycles = 12;
+  const timer = setInterval(() => {
+    sound.tick();
+    const tempPick = pool[Math.floor(Math.random() * pool.length)];
+    renderItem(tempPick, false);
+    rollCycles--;
+
+    if (rollCycles <= 0) {
+      clearInterval(timer);
+      stage.classList.remove('shuffle');
+      finalizePick();
+    }
+  }, 70);
+}
+
+function finalizePick() {
+  const item = pool.pop();
+  called.unshift(item);
+  renderItem(item, true);
+  sound.reveal();
+
+  if (speechEnabled && item.speak && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(item.speak);
+    u.lang = 'en-US';
+    u.rate = 0.9;
+    window.speechSynthesis.speak(u);
+  }
+
+  addHistoryPill(item);
+  updateStats();
+  isRolling = false;
+}
+
+function renderItem(item, isFinal) {
+  document.getElementById('categoryBadge').innerText = item.category || 'CALLER';
+  const main = document.getElementById('mainDisplay');
+  const sub = document.getElementById('subDisplay');
+
+  if (item.customRender) {
+    main.innerHTML = item.customRender;
+  } else if (item.html) {
+    main.innerHTML = item.html;
+  } else {
+    main.innerText = item.display;
+  }
+
+  sub.innerText = item.sub || '';
+}
+
+function addHistoryPill(item) {
+  const stream = document.getElementById('historyStream');
+  // Remove latest glow on previous pills
+  const oldLatest = stream.querySelector('.latest');
+  if (oldLatest) oldLatest.classList.remove('latest');
+
+  const pill = document.createElement('div');
+  pill.className = 'history-pill latest';
+  pill.innerText = item.pill || item.display;
+  stream.prepend(pill);
+}
+
+function updateStats() {
+  document.getElementById('poolStats').innerText = `Drawn: ${called.length} | Remaining: ${pool.length}`;
+}
+
+function resetPool() {
+  initSelectedMode();
+}
+
+/* ================= CONTROLS & HELPERS ================= */
+function toggleAutoDraw() {
+  if (autoTimer) {
+    stopAutoDraw();
+  } else {
+    document.getElementById('btnAuto').classList.add('active');
+    document.getElementById('btnAuto').innerText = `⏱️ AUTO: ON (${autoSeconds}s)`;
+    triggerDraw();
+    autoTimer = setInterval(() => {
+      triggerDraw();
+    }, autoSeconds * 1000);
+  }
+}
+
+function stopAutoDraw() {
+  if (autoTimer) {
+    clearInterval(autoTimer);
+    autoTimer = null;
+    document.getElementById('btnAuto').classList.remove('active');
+    document.getElementById('btnAuto').innerText = '⏱️ AUTO: OFF';
+  }
+}
+
+function toggleAudio() {
+  sound.enabled = !sound.enabled;
+  document.getElementById('btnSound').innerText = sound.enabled ? '🔊' : '🔇';
+}
+
+function toggleSpeech() {
+  speechEnabled = !speechEnabled;
+  document.getElementById('btnSpeech').innerText = speechEnabled ? '🗣️' : '🤐';
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+function openWordModal() {
+  document.getElementById('wordModal').style.display = 'flex';
+}
+
+function closeWordModal(save) {
+  document.getElementById('wordModal').style.display = 'none';
+  if (save) initSelectedMode();
+}
+
+/* Keyboard Hotkeys */
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); triggerDraw(); }
+  if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  if (e.key === 'm' || e.key === 'M') toggleAudio();
+  if (e.key === 'c' || e.key === 'C') shootConfetti();
+});
+
+// Initial boot
+initSelectedMode();
+</script>
+</body>
+</html>
